@@ -1,0 +1,385 @@
+---
+title: "Clara adhesin clustering"
+author: "Katarzyna Sidorczuk"
+date: "12/09/2021"
+output: 
+  html_document:
+  toc: true
+params:
+  k: 2
+  type: "all"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width = 12, fig.height = 8, warning = FALSE, message = FALSE, cache = TRUE, cache.lazy = FALSE)
+
+library(dplyr)
+library(cluster)
+library(factoextra)
+library(DT)
+library(tidyr)
+library(ggplot2)
+library(adhesiomeR)
+library(class)
+library(patchwork)
+library(htmltools)
+library(stabm)
+library(ggdendro)
+
+set.seed(73607254)
+
+
+colors <- adhesiomeR::pathotype_colors
+
+my_DT <- function(x, ...)
+  datatable(x, ..., escape = FALSE, extensions = 'Buttons', filter = "top", rownames = FALSE,
+            style = "bootstrap")
+
+options(DT.options = list(dom = "Brtip",
+                          buttons = c("copy", "csv", "excel", "print"),
+                          pageLength = 50
+))
+
+load(paste0(data_path, "Clustering/clustering.RData"))
+
+x <- if(params[["type"]] %in% c("all", "all_man")) {
+  x
+} else if(params[["type"]] %in% c("fimbrial", "fimbrial_man")) {
+  fimbrial_x
+} else if(params[["type"]] %in% c("nonfimbrial", "nonfimbrial_man")) {
+  nonfimbrial_x
+}
+
+dist <- if(params[["type"]] == "all") {
+  dist_jaccard
+} else if(params[["type"]] == "fimbrial") {
+  dist_fimbrial
+} else if(params[["type"]] == "nonfimbrial") {
+  dist_nonfimbrial
+} else if(params[["type"]] == "all_man") {
+  dist_man 
+} else if(params[["type"]] == "fimbrial_man") {
+  dist_fimbrial_man
+} else if(params[["type"]] == "nonfimbrial_man") {
+  dist_nonfimbrial_man
+}
+
+meta <- if(params[["type"]] %in% c("all", "all_man")) {
+  meta
+} else if(params[["type"]] %in% c("fimbrial", "fimbrial_man")) {
+  fimbrial_meta
+} else if(params[["type"]] %in% c("nonfimbrial", "nonfimbrial_man")) {
+  nonfimbrial_meta
+}
+```
+
+
+```{r}
+metric_type <- ifelse(params[["type"]] %in% c("all", "fimbrial", "nonfimbrial"), "jaccard", "manhattan")
+
+cl_cl <- clara(x, params[["k"]], metric = metric_type)
+
+cl_cl_meta <- left_join(meta,
+                        data.frame(profile = 1:nrow(x),
+                                   cluster = cl_cl[["clustering"]]))
+
+meta2 <- meta %>%
+  group_by(profile) %>%
+  dplyr::summarise(pathotype = names(table(pathotype))[which.max(table(pathotype))])
+```
+
+### Cluster sizes
+```{r}
+size_df <- data.frame(method = "Clara",
+                      k = params[["k"]],
+                      cluster = 1:params[["k"]],
+                      cl_cl[["clusinfo"]],
+                      clus_avg_width = cl_cl[["silinfo"]][["clus.avg.widths"]])
+
+my_DT(size_df)
+
+write.csv(size_df, paste0(data_path, "Clustering/Tests/Clara_k=", params[["k"]], "_stats_", params[["type"]], ".csv"), row.names = FALSE)
+```
+
+### Pathotypes in clusters
+```{r}
+cl_cl_path <- cl_cl_meta %>%
+  group_by(cluster, pathotype) %>%
+  dplyr::summarise(n = n())
+
+p_cl_cl <- get_pathotype_plot(cl_cl_path) + get_size_plot(size_df) + plot_layout(widths = c(0.6, 0.4), guides = "collect") &
+  theme(legend.position = "bottom")
+
+p_cl_cl
+
+ggsave(paste0(data_path, "Clustering/Tests/Clara_k=", params[["k"]], "_clustering_", params[["type"]], ".png"), p_cl_cl, width = 12, height = (6+params[["k"]]/10))
+
+my_DT(cl_cl_path)
+```
+
+```{r}
+x_cl <- x %>% 
+  mutate(cluster = cl_cl[["clustering"]],
+         genome = 1:nrow(x))
+
+dendro_path_plot <- get_dendro_path_plot(x_cl, cl_cl_path, size_df)
+
+ggsave(paste0(data_path, "Clustering/Tests/Clara_k=", params[["k"]], "_clustering_dendro_", params[["type"]], ".png"), dendro_path_plot, width = 14, height = (6+params[["k"]]/10))
+
+dendro_path_plot
+
+
+means_df <- lapply(unique(x_cl[["cluster"]]), function(i) {
+    x_cl %>% 
+      filter(cluster == i) %>% 
+      select(-c("cluster", "genome")) %>% 
+      colMeans()
+  }) %>% bind_rows() %>% 
+    mutate(cluster = unique(x_cl[["cluster"]])) %>% 
+  t() %>% 
+  data.frame() %>% 
+  setNames(c(1:params[["k"]])) %>% 
+  tibble::rownames_to_column("Gene")
+
+write.csv(means_df, paste0(data_path, "Clustering/Tests/Clara_k=", params[["k"]], "_clustering_gene_means_", params[["type"]], ".csv"),
+          row.names = FALSE)  
+
+my_DT(means_df)
+```
+
+
+### Overview of adhesins in clusters
+```{r, fig.width=10, fig.height=20}
+x_cl <- x %>% 
+  mutate(cluster = cl_cl[["clustering"]],
+         genome = 1:nrow(x))
+
+x_cl %>% 
+  pivot_longer(colnames(.)[1:(ncol(.)-2)], names_to = "Gene", values_to = "Presence") %>% 
+  ggplot(aes(x = genome, y = Gene, fill = as.factor(Presence))) +
+  geom_tile() +
+  facet_wrap(~cluster, scales = "free_x", nrow = 1) +
+  scale_fill_manual(values = c("1" = "#e42b24", "0" = "#85c1ff")) +
+  theme_bw(base_size = 5) +
+  theme(legend.position = "none",
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank())
+
+cluster_plots <- list()
+cluster_plots_widths <- c()
+for(i in 1:params[["k"]]) {
+  selected <- which(cl_cl[["clustering"]] == i)
+  adhesin_data <- x[selected, ] %>%
+    mutate(genome = 1:nrow(.)) %>% 
+    pivot_longer(1:ncol(.)-1, names_to = "Gene", values_to = "Presence")
+  p <- if(i == 1) {
+    ggplot(adhesin_data, aes(x = Gene, y = genome, fill = as.factor(Presence))) +
+      geom_tile() +
+      scale_fill_manual(values = c("1" = "#e42b24", "0" = "#85c1ff")) +
+      scale_x_discrete(expand = c(0, 0)) +
+      scale_y_discrete(expand = c(0, 0)) +
+      theme_bw(base_size = 7) +
+      theme(legend.position = "none",
+            axis.text.x = element_blank(),
+            axis.ticks.x = element_blank(),
+            panel.spacing = unit(0, "cm"),
+            plot.margin = margin(0, 0, 0, 0, "cm"),
+            axis.title.x = element_blank(),
+            plot.title = element_text(hjust = 0.5)) +
+      coord_flip() +
+      ggtitle(paste0(i))
+  } else {
+    ggplot(adhesin_data, aes(x = Gene, y = genome, fill = as.factor(Presence))) +
+      geom_tile() +
+      scale_fill_manual(values = c("1" = "#e42b24", "0" = "#85c1ff")) +
+      scale_x_discrete(expand = c(0, 0)) +
+      scale_y_discrete(expand = c(0, 0)) +
+      theme_bw(base_size = 7) +
+      theme(legend.position = "none",
+            axis.text.x = element_blank(),
+            axis.ticks.x = element_blank(),
+            panel.spacing = unit(0, "cm"),
+            plot.margin = margin(0, 0, 0, 0, "cm"),
+            axis.title.x = element_blank(),
+            axis.text.y = element_blank(),
+            axis.ticks.y = element_blank(),
+            axis.title.y = element_blank(),
+            plot.title = element_text(hjust = 0.5)) +
+      coord_flip() +
+      ggtitle(paste0(i))
+  }
+  
+  cluster_plots[[i]] <- p
+  cluster_plots_widths[i] <- length(selected)/25
+}
+cluster_plots_widths[which(cluster_plots_widths < 1)] <- 1
+combined_plots <- wrap_plots(cluster_plots, nrow = 1, widths = cluster_plots_widths)
+ggsave(paste0(data_path, "Clustering/Tests/Clara_k=", params[["k"]], "_clusters_", params[["type"]], ".png"), combined_plots,
+       width = 60, height = 25, limitsize = FALSE)
+combined_plots
+```
+
+
+
+### Association of genes with clustering
+```{r, fig.width=10, fig.height=20}
+x_cl <- x %>% 
+  mutate(cluster = cl_cl[["clustering"]],
+         genome = 1:nrow(x))
+
+
+clustering_genes <- as.dendrogram(hclust(dist(t(as.matrix(select(x_cl, -c("cluster", "genome"))))), method = "ward.D2"))
+gene_order <- order.dendrogram(clustering_genes)
+
+cluster_plots <- list()
+cluster_plots_widths <- c()
+for(i in 1:params[["k"]]) {
+  selected <- which(cl_cl[["clustering"]] == i)
+  adhesin_data <- x[selected, ] %>%
+    mutate(genome = 1:nrow(.)) %>% 
+    pivot_longer(1:ncol(.)-1, names_to = "Gene", values_to = "Presence") %>% 
+    mutate(Gene = factor(Gene, levels = colnames(select(x_cl, -c("cluster", "genome")))[gene_order]))
+  p <- if(i == 1) {
+    ggplot(adhesin_data, aes(x = Gene, y = genome, fill = as.factor(Presence))) +
+      geom_tile() +
+      scale_fill_manual(values = c("1" = "#e42b24", "0" = "#85c1ff")) +
+      scale_x_discrete(expand = c(0, 0)) +
+      scale_y_discrete(expand = c(0, 0)) +
+      theme_bw(base_size = 7) +
+      theme(legend.position = "none",
+            axis.text.x = element_blank(),
+            axis.ticks.x = element_blank(),
+            panel.spacing = unit(0, "cm"),
+            plot.margin = margin(0, 0, 0, 0, "cm"),
+            axis.title.x = element_blank(),
+            plot.title = element_text(hjust = 0.5)) +
+      coord_flip() +
+      ggtitle(paste0(i))
+  } else {
+    ggplot(adhesin_data, aes(x = Gene, y = genome, fill = as.factor(Presence))) +
+      geom_tile() +
+      scale_fill_manual(values = c("1" = "#e42b24", "0" = "#85c1ff")) +
+      scale_x_discrete(expand = c(0, 0)) +
+      scale_y_discrete(expand = c(0, 0)) +
+      theme_bw(base_size = 7) +
+      theme(legend.position = "none",
+            axis.text.x = element_blank(),
+            axis.ticks.x = element_blank(),
+            panel.spacing = unit(0, "cm"),
+            plot.margin = margin(0, 0, 0, 0, "cm"),
+            axis.title.x = element_blank(),
+            axis.text.y = element_blank(),
+            axis.ticks.y = element_blank(),
+            axis.title.y = element_blank(),
+            plot.title = element_text(hjust = 0.5)) +
+      coord_flip() +
+      ggtitle(paste0(i))
+  }
+  
+  cluster_plots[[i]] <- p
+  cluster_plots_widths[i] <- length(selected)/25
+}
+
+dendro <- clustering_genes %>%
+  dendro_data %>%
+  segment %>%
+  ggplot(aes(x = x, y = y, xend = xend, yend = yend)) +
+  geom_segment() +
+  scale_y_continuous("",
+                     expand = c(0, 0)) +
+  scale_x_discrete("",
+                   limits = factor(1L:nobs(clustering_genes)),
+                   labels = dendro_data(clustering_genes)[["labels"]][["label"]]) + 
+  theme_void() +
+  coord_flip() 
+  
+cluster_plots_widths[which(cluster_plots_widths < 1)] <- 1
+combined_plots <- wrap_plots(cluster_plots, nrow = 1, widths = cluster_plots_widths)
+combined_plots2 <- wrap_plots(combined_plots, dendro, nrow = 1, widths = c(0.9, 0.1))
+
+ggsave(paste0(data_path, "Clustering/Tests/Clara_k=", params[["k"]], "_clusters_genes_", params[["type"]], ".png"), combined_plots2,
+       width = 60, height = 25, limitsize = FALSE)
+combined_plots2
+
+dendro2 <- clustering_genes %>%
+  dendro_data %>%
+  segment %>%
+  ggplot(aes(x = x, y = y, xend = xend, yend = yend)) +
+  geom_segment() +
+  scale_y_continuous("",
+                     expand = c(0, 0)) +
+  scale_x_discrete("",
+                   limits = factor(1L:nobs(clustering_genes)),
+                   labels = dendro_data(clustering_genes)[["labels"]][["label"]]) + 
+  theme_void() +
+  coord_flip() 
+
+ggsave(paste0(data_path, "Clustering/Tests/Clara_k=", params[["k"]], "_clusters_genes_dendro_", params[["type"]], ".png"), dendro2,
+       width = 6, height = 35, limitsize = FALSE)
+```
+
+
+
+```{r}
+dendro <- get_dendro(x_cl)
+fst_cl <- dendro[["cl_order"]][1]
+cluster_plots2 <- list()
+cluster_plots_widths2 <- c()
+nr <- 0
+for(i in dendro[["cl_order"]]) {
+  selected <- which(cl_cl[["clustering"]] == i)
+  nr <- nr+1
+  adhesin_data <- x[selected, ] %>%
+    mutate(genome = 1:nrow(.)) %>% 
+    pivot_longer(1:ncol(.)-1, names_to = "Gene", values_to = "Presence")
+  p <- if(i == fst_cl) {
+    ggplot(adhesin_data, aes(x = Gene, y = genome, fill = as.factor(Presence))) +
+      geom_tile() +
+      scale_fill_manual(values = c("1" = "#e42b24", "0" = "#85c1ff")) +
+      scale_x_discrete(expand = c(0, 0)) +
+      scale_y_discrete(expand = c(0, 0)) +
+      theme_bw(base_size = 7) +
+      theme(legend.position = "none",
+            axis.text.x = element_blank(),
+            axis.ticks.x = element_blank(),
+            panel.spacing = unit(0, "cm"),
+            plot.margin = margin(0, 0, 0, 0, "cm"),
+            axis.title.x = element_blank(),
+            plot.title = element_text(hjust = 0.5)) +
+      coord_flip() +
+      ggtitle(paste0(i))
+  } else {
+    ggplot(adhesin_data, aes(x = Gene, y = genome, fill = as.factor(Presence))) +
+      geom_tile() +
+      scale_fill_manual(values = c("1" = "#e42b24", "0" = "#85c1ff")) +
+      scale_x_discrete(expand = c(0, 0)) +
+      scale_y_discrete(expand = c(0, 0)) +
+      theme_bw(base_size = 7) +
+      theme(legend.position = "none",
+            axis.text.x = element_blank(),
+            axis.ticks.x = element_blank(),
+            panel.spacing = unit(0, "cm"),
+            plot.margin = margin(0, 0, 0, 0, "cm"),
+            axis.title.x = element_blank(),
+            axis.text.y = element_blank(),
+            axis.ticks.y = element_blank(),
+            axis.title.y = element_blank(),
+            plot.title = element_text(hjust = 0.5)) +
+      coord_flip() +
+      ggtitle(paste0(i))
+  }
+  
+  cluster_plots2[[nr]] <- p
+  cluster_plots_widths2[nr] <- length(selected)/25
+}
+
+z <- wrap_plots(cluster_plots2, nrow = 1, widths = cluster_plots_widths2)
+z2 <- wrap_plots(dendro[["dendro"]], z, ncol = 1, heights = c(0.1, 0.9))
+z3 <- wrap_plots(z, dendro2, nrow = 1, widths = c(0.9, 0.1))
+
+ggsave(paste0(data_path, "Clustering/Tests/Clara_k=", params[["k"]], "_clusters_dendro_", params[["type"]], ".png"), z2,
+       width = 60, height = 28, limitsize = FALSE)
+ggsave(paste0(data_path, "Clustering/Tests/Clara_k=", params[["k"]], "_clusters_genes_sorted_", params[["type"]], ".png"), z3,
+       width = 60, height = 28, limitsize = FALSE)
+```
