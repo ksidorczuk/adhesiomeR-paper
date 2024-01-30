@@ -72,6 +72,30 @@ nonfimbrial_clusters_df %>%
   mutate(Cluster_name = nonfimbrial_cluster_names) %>% 
   write.csv(paste0(data_path, "Clustering/Clusters_nonfimbrial_genomes.csv"), row.names = FALSE)
 
+
+### Publication plots ###
+# Pathotype and cluster size plots
+cl_path_plot_all <- get_pathotype_cluster_plot(all_clusters_df, clustering_all, all_cluster_names, 450)
+cl_inex_plot_all <- get_pathotype_cluster_plot(all_clusters_df, clustering_all, all_cluster_names, 450, type = "inpec")
+ggsave(paste0(data_path, "Clustering/Clusters_pathotypes_all.png"), cl_path_plot_all, width = 12, height = 6)
+ggsave(paste0(data_path, "Clustering/Clusters_pathotypes_all.eps"), cl_path_plot_all, width = 12, height = 6)
+ggsave(paste0(data_path, "Clustering/Clusters_InPECExPEC_all.png"), cl_inex_plot_all, width = 12, height = 6)
+ggsave(paste0(data_path, "Clustering/Clusters_InPECExPEC_all.eps"), cl_inex_plot_all, width = 12, height = 6)
+cl_path_plot_fimbrial <- get_pathotype_cluster_plot(fimbrial_clusters_df, clustering_fimbrial, fimbrial_cluster_names, 500)
+cl_inex_plot_fimbrial <- get_pathotype_cluster_plot(fimbrial_clusters_df, clustering_fimbrial, fimbrial_cluster_names, 500, type = "inpec")
+ggsave(paste0(data_path, "Clustering/Clusters_pathotypes_fimbrial.png"), cl_path_plot_fimbrial, width = 12, height = 6)
+ggsave(paste0(data_path, "Clustering/Clusters_pathotypes_fimbrial.eps"), cl_path_plot_fimbrial, width = 12, height = 6)
+ggsave(paste0(data_path, "Clustering/Clusters_InPECExPEC_fimbrial.png"), cl_inex_plot_fimbrial, width = 12, height = 6)
+ggsave(paste0(data_path, "Clustering/Clusters_InPECExPEC_fimbrial.eps"), cl_inex_plot_fimbrial, width = 12, height = 6)
+cl_path_plot_nonfimbrial <- get_pathotype_cluster_plot(nonfimbrial_clusters_df, clustering_nonfimbrial, nonfimbrial_cluster_names, 600)
+cl_inex_plot_nonfimbrial <- get_pathotype_cluster_plot(nonfimbrial_clusters_df, clustering_nonfimbrial, nonfimbrial_cluster_names, 600, type = "inpec")
+ggsave(paste0(data_path, "Clustering/Clusters_pathotypes_nonfimbrial.png"), cl_path_plot_nonfimbrial, width = 12, height = 5)
+ggsave(paste0(data_path, "Clustering/Clusters_pathotypes_nonfimbrial.eps"), cl_path_plot_nonfimbrial, width = 12, height = 5)
+ggsave(paste0(data_path, "Clustering/Clusters_InPECExPEC_nonfimbrial.png"), cl_inex_plot_nonfimbrial, width = 12, height = 5)
+ggsave(paste0(data_path, "Clustering/Clusters_InPECExPEC_nonfimbrial.eps"), cl_inex_plot_nonfimbrial, width = 12, height = 5)
+
+get_pathotype_cluster_plot(all_clusters_df, clustering_all, all_cluster_names, 450) 
+
 # Change cluster names
 clustering_all[["clustering"]] <- sapply(clustering_all[["clustering"]], function(i) all_cluster_names[i])
 clustering_fimbrial[["clustering"]] <- sapply(clustering_fimbrial[["clustering"]], function(i) fimbrial_cluster_names[i])
@@ -82,18 +106,6 @@ save(clustering_all, file = paste0(data_path, "adhesiomeR_files/clustering_all.r
 save(clustering_fimbrial, file = paste0(data_path, "adhesiomeR_files/clustering_fimbrial.rda"), compress = "xz")
 save(clustering_nonfimbrial, file = paste0(data_path, "adhesiomeR_files/clustering_nonfimbrial.rda"), compress = "xz")
 
-
-### Publication plots ###
-# Pathotype and cluster size plots
-cl_path_plot_all <- get_pathotype_cluster_plot(all_clusters_df, clustering_all, all_cluster_names, 200)
-ggsave(paste0(data_path, "Clustering/Clusters_pathotypes_all.png"), cl_path_plot_all, width = 12, height = 6)
-ggsave(paste0(data_path, "Clustering/Clusters_pathotypes_all.eps"), cl_path_plot_all, width = 12, height = 6)
-cl_path_plot_fimbrial <- get_pathotype_cluster_plot(fimbrial_clusters_df, clustering_fimbrial, fimbrial_cluster_names, 70)
-ggsave(paste0(data_path, "Clustering/Clusters_pathotypes_fimbrial.png"), cl_path_plot_fimbrial, width = 12, height = 6)
-ggsave(paste0(data_path, "Clustering/Clusters_pathotypes_fimbrial.eps"), cl_path_plot_fimbrial, width = 12, height = 6)
-cl_path_plot_nonfimbrial <- get_pathotype_cluster_plot(nonfimbrial_clusters_df, clustering_nonfimbrial, nonfimbrial_cluster_names, 160)
-ggsave(paste0(data_path, "Clustering/Clusters_pathotypes_nonfimbrial.png"), cl_path_plot_nonfimbrial, width = 12, height = 5)
-ggsave(paste0(data_path, "Clustering/Clusters_pathotypes_nonfimbrial.eps"), cl_path_plot_nonfimbrial, width = 12, height = 5)
 
 
 
