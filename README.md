@@ -11,7 +11,7 @@ Data files necessary to run the scripts are available [here](https://www.dropbox
 Analysis and generation of plots from blast all to all comparison of adhesin sequences. 
 
 Files with adhesin information necessary to run the script: [Adhesins.xlsx](https://www.dropbox.com/scl/fi/mac3wzohoxu0wpjloj2wy/Adhesins.xlsx)
-Directory with BLAST results and plots we obtained: [BLAST](https://www.dropbox.com/scl/fo/s2lma468wqlcdmgrjjxmm/h?rlkey=hhd385dlpmjy6t3wpxevr7897&dl=0)
+Directory with BLAST results and plots we obtained: [BLAST](https://www.dropbox.com/scl/fo/s2lma468wqlcdmgrjjxmm/ACUIES9SDA-GOQoZgml1mK0)
 
 ### 03-Initial_pathotypes_analysis.R
 
